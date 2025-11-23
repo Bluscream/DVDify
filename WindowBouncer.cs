@@ -25,14 +25,13 @@ public class WindowBouncer
 
     public void Start(WindowInfo? specificWindow = null)
     {
-        // If already running and hotkey pressed (specificWindow is null), stop and restart
+        // If already running and hotkey pressed (specificWindow is null), stop
         if (_isRunning && specificWindow == null)
         {
-            DebugLogger.Log("Bouncing stopped (already running, hotkey pressed again)");
+            DebugLogger.Log("Bouncing stopped (already running, hotkey pressed again - manual stop)");
             Stop();
-            // Small delay to ensure window state is reset
-            System.Threading.Thread.Sleep(50);
-            // Continue to start with new window
+            // Don't restart - user manually stopped it
+            return;
         }
         else if (_isRunning && specificWindow != null)
         {
@@ -42,64 +41,38 @@ public class WindowBouncer
         }
 
         DebugLogger.Log("=== Starting bounce ===");
-        DebugLogger.Log($"Total rules: {_config.WindowRules?.Count ?? 0}, Enabled rules: {_config.WindowRules?.Count(r => r.Enabled) ?? 0}");
+        int totalRules = _config.WindowRules?.Count ?? 0;
+        int enabledRules = _config.WindowRules?.Count(r => r.Enabled) ?? 0;
+        DebugLogger.Log($"Total rules: {totalRules}, Enabled rules: {enabledRules}");
 
         WindowInfo? windowInfo = specificWindow;
 
         if (windowInfo == null)
         {
-            // First try the foreground window
+            // Hotkey pressed - always use foreground window (bypass rules)
             var foregroundWindow = WindowUtils.GetForegroundWindowInfo();
             if (foregroundWindow.Handle != IntPtr.Zero)
             {
-                DebugLogger.LogWindowInfo("Foreground window", foregroundWindow);
-                if (MatchesAnyRule(foregroundWindow))
-                {
-                    DebugLogger.Log("Foreground window matches a rule");
-                    windowInfo = foregroundWindow;
-                }
-                else
-                {
-                    DebugLogger.Log("Foreground window does NOT match any rule");
-                }
+                DebugLogger.LogWindowInfo("Hotkey pressed - using foreground window (bypassing rules)", foregroundWindow);
+                windowInfo = foregroundWindow;
             }
             else
             {
                 DebugLogger.Log("No foreground window found");
             }
-
-            if (windowInfo == null)
-            {
-                // If foreground window doesn't match, search all windows for a match
-                DebugLogger.Log("Searching all windows for a match...");
-                var allWindows = WindowUtils.GetAllWindowsInfo();
-                DebugLogger.Log($"Found {allWindows.Count} visible windows");
-                
-                foreach (var window in allWindows)
-                {
-                    if (MatchesAnyRule(window))
-                    {
-                        DebugLogger.LogWindowInfo("Found matching window", window);
-                        windowInfo = window;
-                        // Bring the matched window to foreground
-                        WindowUtils.BringWindowToForeground(window.Handle);
-                        break;
-                    }
-                }
-
-                if (windowInfo == null)
-                {
-                    DebugLogger.Log("No matching window found in all windows");
-                }
-            }
         }
         else
         {
-            DebugLogger.LogWindowInfo("Using provided window", windowInfo);
+            // Window provided (from startup/watcher) - check rules
+            DebugLogger.LogWindowInfo("Using provided window (checking rules)", windowInfo);
             if (!MatchesAnyRule(windowInfo))
             {
                 DebugLogger.Log("Provided window does NOT match any rule");
                 windowInfo = null;
+            }
+            else
+            {
+                DebugLogger.Log("Provided window matches a rule");
             }
         }
 
@@ -110,6 +83,7 @@ public class WindowBouncer
         }
 
         // Normalize and resize window if needed
+        DebugLogger.Log($"Normalizing window (max size: {_config.Animation.MaxWindowSizePercent}%)");
         WindowUtils.NormalizeAndResizeWindow(windowInfo.Handle, _config.Animation.MaxWindowSizePercent);
         
         // Refresh window info after normalization (unless we were given a specific window)
@@ -120,6 +94,7 @@ public class WindowBouncer
             if (refreshedWindow.Handle != IntPtr.Zero)
             {
                 windowInfo = refreshedWindow;
+                DebugLogger.LogWindowInfo("Refreshed window after normalization", windowInfo);
             }
         }
         else
@@ -130,11 +105,15 @@ public class WindowBouncer
             if (refreshedWindow.Handle != IntPtr.Zero)
             {
                 windowInfo = refreshedWindow;
+                DebugLogger.LogWindowInfo("Refreshed provided window after normalization", windowInfo);
             }
         }
         
         if (windowInfo.Handle == IntPtr.Zero)
+        {
+            DebugLogger.Log("ERROR: Window handle is zero after normalization");
             return;
+        }
 
         _currentWindow = windowInfo;
         
@@ -142,17 +121,21 @@ public class WindowBouncer
         if (_config.Animation.UseAllScreens)
         {
             _allScreensBounds = WindowUtils.GetAllScreensBounds();
+            DebugLogger.Log($"Using all screens bounds: X={_allScreensBounds.X}, Y={_allScreensBounds.Y}, W={_allScreensBounds.Width}, H={_allScreensBounds.Height}");
         }
         else
         {
             _allScreensBounds = WindowUtils.GetCurrentScreenBounds(windowInfo.Handle);
+            DebugLogger.Log($"Using current screen bounds: X={_allScreensBounds.X}, Y={_allScreensBounds.Y}, W={_allScreensBounds.Width}, H={_allScreensBounds.Height}");
         }
 
         // Initialize velocity (diagonal movement)
         _velocityX = _config.Animation.Speed;
         _velocityY = _config.Animation.Speed;
+        DebugLogger.Log($"Initialized velocity: X={_velocityX}, Y={_velocityY}, Speed={_config.Animation.Speed}, Interval={_config.Animation.UpdateInterval}ms");
 
         _isRunning = true;
+        DebugLogger.Log("Bouncing animation started");
 
         // Start animation timer
         _animationTimer = new System.Windows.Forms.Timer
@@ -161,55 +144,141 @@ public class WindowBouncer
         };
         _animationTimer.Tick += AnimationTimer_Tick;
         _animationTimer.Start();
+        DebugLogger.Log($"Animation timer started with interval: {_config.Animation.UpdateInterval}ms");
     }
 
     public void Stop()
     {
         if (!_isRunning)
+        {
+            DebugLogger.Log("Stop() called but bouncing is not running");
             return;
+        }
 
+        DebugLogger.Log("Stopping bouncing animation");
         _isRunning = false;
         _animationTimer?.Stop();
         _animationTimer?.Dispose();
         _animationTimer = null;
+        
+        if (_currentWindow != null)
+        {
+            DebugLogger.LogWindowInfo("Stopped bouncing window", _currentWindow);
+        }
         _currentWindow = null;
 
         BouncingStopped?.Invoke(this, EventArgs.Empty);
+        DebugLogger.Log("Bouncing animation stopped");
+    }
+
+    private int _tickCount = 0;
+    private int _lastLoggedTick = 0;
+    private DateTime _lastConfettiTime = DateTime.MinValue;
+    private const int CONFETTI_COOLDOWN_MS = 500; // 500ms cooldown between confetti animations
+
+    private void ShowConfetti()
+    {
+        // Cooldown to prevent too many confetti animations
+        var timeSinceLastConfetti = (DateTime.Now - _lastConfettiTime).TotalMilliseconds;
+        if (timeSinceLastConfetti < CONFETTI_COOLDOWN_MS)
+        {
+            DebugLogger.Log($"Confetti cooldown active: {CONFETTI_COOLDOWN_MS - (int)timeSinceLastConfetti}ms remaining");
+            return;
+        }
+        
+        try
+        {
+            DebugLogger.Log("PERFECT HIT! Showing confetti animation");
+            _lastConfettiTime = DateTime.Now;
+            var confettiForm = new ConfettiForm();
+            confettiForm.Show();
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.Log($"Error showing confetti: {ex.Message}");
+        }
     }
 
     private void AnimationTimer_Tick(object? sender, EventArgs e)
     {
         if (!_isRunning || _currentWindow == null)
         {
+            DebugLogger.Log("Animation timer tick but bouncing not running or window is null");
             Stop();
             return;
         }
 
+        _tickCount++;
+        
         // Calculate new position
         int newX = _currentWindow.X + _velocityX;
         int newY = _currentWindow.Y + _velocityY;
 
         // Check boundaries and bounce
+        bool perfectHit = false;
+        // Use a stricter margin for "perfect" hits - 0.5% or 2px, whichever is smaller
+        int marginX = Math.Min(2, Math.Max(1, (int)(_allScreensBounds.Width * 0.005))); // 0.5% margin, max 2px
+        int marginY = Math.Min(2, Math.Max(1, (int)(_allScreensBounds.Height * 0.005))); // 0.5% margin, max 2px
+        
+        // Store original position before clamping to check for perfect hit
+        int originalX = newX;
+        int originalY = newY;
+        
         if (newX <= _allScreensBounds.Left)
         {
+            // Check if it's a perfect hit (within 1% margin) - window is exactly at or very close to edge
+            int distanceFromEdge = Math.Abs(originalX - _allScreensBounds.Left);
+            perfectHit = distanceFromEdge <= marginX;
+            
             newX = _allScreensBounds.Left;
             _velocityX = Math.Abs(_velocityX); // Bounce right
+            DebugLogger.Log($"Bounced off left edge: X={newX}, originalX={originalX}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHit}");
         }
         else if (newX + _currentWindow.Width >= _allScreensBounds.Right)
         {
+            // Check if it's a perfect hit (within 1% margin) - window edge is exactly at or very close to screen edge
+            int rightEdge = originalX + _currentWindow.Width;
+            int distanceFromEdge = Math.Abs(rightEdge - _allScreensBounds.Right);
+            perfectHit = distanceFromEdge <= marginX;
+            
             newX = _allScreensBounds.Right - _currentWindow.Width;
             _velocityX = -Math.Abs(_velocityX); // Bounce left
+            DebugLogger.Log($"Bounced off right edge: X={newX}, rightEdge={rightEdge}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHit}");
         }
 
         if (newY <= _allScreensBounds.Top)
         {
+            // Check if it's a perfect hit (within 1% margin)
+            int distanceFromEdge = Math.Abs(originalY - _allScreensBounds.Top);
+            perfectHit = perfectHit || distanceFromEdge <= marginY;
+            
             newY = _allScreensBounds.Top;
             _velocityY = Math.Abs(_velocityY); // Bounce down
+            DebugLogger.Log($"Bounced off top edge: Y={newY}, originalY={originalY}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHit}");
         }
         else if (newY + _currentWindow.Height >= _allScreensBounds.Bottom)
         {
+            // Check if it's a perfect hit (within 1% margin)
+            int bottomEdge = originalY + _currentWindow.Height;
+            int distanceFromEdge = Math.Abs(bottomEdge - _allScreensBounds.Bottom);
+            perfectHit = perfectHit || distanceFromEdge <= marginY;
+            
             newY = _allScreensBounds.Bottom - _currentWindow.Height;
             _velocityY = -Math.Abs(_velocityY); // Bounce up
+            DebugLogger.Log($"Bounced off bottom edge: Y={newY}, bottomEdge={bottomEdge}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHit}");
+        }
+
+        // Show confetti on perfect hit (only once per bounce, not for every edge)
+        if (perfectHit)
+        {
+            ShowConfetti();
+        }
+
+        // Log position every 60 ticks (roughly once per second at 16ms interval)
+        if (_tickCount - _lastLoggedTick >= 60)
+        {
+            DebugLogger.Log($"Position update: ({newX}, {newY}), Velocity: ({_velocityX}, {_velocityY}), Tick: {_tickCount}");
+            _lastLoggedTick = _tickCount;
         }
 
         // Update window position
@@ -226,6 +295,14 @@ public class WindowBouncer
             return true; // No rules means all windows match
         }
 
+        // Check if there are any enabled rules at all
+        bool hasEnabledRules = _config.WindowRules.Any(r => r.Enabled);
+        if (!hasEnabledRules)
+        {
+            DebugLogger.Log("All rules are disabled - no windows match");
+            return false; // All rules disabled means no match
+        }
+
         // Check if any enabled rule matches
         int ruleIndex = 0;
         foreach (var rule in _config.WindowRules)
@@ -233,7 +310,6 @@ public class WindowBouncer
             ruleIndex++;
             if (!rule.Enabled)
             {
-                DebugLogger.Log($"Rule {ruleIndex}: Disabled, skipping");
                 continue;
             }
 
@@ -353,10 +429,15 @@ public class WindowBouncer
 
     public void UpdateConfig(AppConfig config)
     {
+        DebugLogger.Log("Updating WindowBouncer configuration");
+        DebugLogger.Log($"New config: Speed={config.Animation.Speed}, Interval={config.Animation.UpdateInterval}ms, MaxSize={config.Animation.MaxWindowSizePercent}%, UseAllScreens={config.Animation.UseAllScreens}");
         _config = config;
-        if (_animationTimer != null)
+        
+        // Update timer interval if running
+        if (_isRunning && _animationTimer != null)
         {
             _animationTimer.Interval = _config.Animation.UpdateInterval;
+            DebugLogger.Log($"Updated animation timer interval to {_config.Animation.UpdateInterval}ms");
         }
         
         if (_config.DebugLogging)

@@ -13,6 +13,7 @@ public class TrayApplicationContext : ApplicationContext
 
     public TrayApplicationContext()
     {
+        DebugLogger.Log("=== TrayApplicationContext Initializing ===");
         _config = ConfigManager.Load();
         
         // Enable debug logging if configured
@@ -21,15 +22,24 @@ public class TrayApplicationContext : ApplicationContext
             DebugLogger.Enable();
         }
         
+        DebugLogger.Log("Initializing tray icon...");
         InitializeTrayIcon();
+        
+        DebugLogger.Log("Initializing hotkey...");
         InitializeHotkey();
+        
+        DebugLogger.Log("Initializing window bouncer...");
         InitializeBouncer();
         
         // Check for matching windows on startup and start animation if found
+        DebugLogger.Log("Scheduling startup window check...");
         CheckAndStartOnStartup();
         
         // Start periodic window watcher to catch new windows
+        DebugLogger.Log("Starting window watcher...");
         StartWindowWatcher();
+        
+        DebugLogger.Log("=== TrayApplicationContext Initialized ===");
     }
     
     private void CheckAndStartOnStartup()
@@ -108,6 +118,14 @@ public class TrayApplicationContext : ApplicationContext
             if (_windowBouncer == null || _windowBouncer.IsRunning)
                 return;
             
+            // Don't auto-start if we just manually stopped (cooldown period)
+            var timeSinceLastStop = (DateTime.Now - _lastManualStop).TotalMilliseconds;
+            if (timeSinceLastStop < WATCHER_COOLDOWN_MS)
+            {
+                DebugLogger.Log($"WindowWatcher: Skipping check (cooldown: {WATCHER_COOLDOWN_MS - (int)timeSinceLastStop}ms remaining)");
+                return;
+            }
+            
             // Find all matching windows and pick the best one
             var allWindows = WindowUtils.GetAllWindowsInfo();
             WindowInfo? bestMatch = null;
@@ -133,10 +151,19 @@ public class TrayApplicationContext : ApplicationContext
             
             if (bestMatch != null)
             {
-                DebugLogger.Log($"WindowWatcher: Found new matching window, starting animation");
+                DebugLogger.Log($"WindowWatcher: Found new matching window (score: {bestMatchScore}), starting animation");
+                DebugLogger.LogWindowInfo("WindowWatcher: Best match", bestMatch);
                 WindowUtils.BringWindowToForeground(bestMatch.Handle);
                 System.Threading.Thread.Sleep(100);
                 _windowBouncer.Start(bestMatch);
+            }
+            else
+            {
+                // Log periodically that we're watching (every 10 checks = 20 seconds)
+                if ((DateTime.Now.Second % 20) < 2)
+                {
+                    DebugLogger.Log($"WindowWatcher: No matching windows found (checked {allWindows.Count} windows)");
+                }
             }
         };
     }
@@ -260,6 +287,8 @@ public class TrayApplicationContext : ApplicationContext
 
     private HotkeyMessageFilter? _messageFilter;
     private System.Windows.Forms.Timer? _windowWatcherTimer;
+    private DateTime _lastManualStop = DateTime.MinValue;
+    private const int WATCHER_COOLDOWN_MS = 2000; // 2 second cooldown after manual stop
 
     private void InitializeHotkey()
     {
@@ -286,6 +315,15 @@ public class TrayApplicationContext : ApplicationContext
 
     private void HotkeyManager_HotkeyPressed(object? sender, EventArgs e)
     {
+        DebugLogger.Log("Hotkey pressed event received in TrayApplicationContext");
+        
+        // If already running, this is a manual stop - record the time
+        if (_windowBouncer != null && _windowBouncer.IsRunning)
+        {
+            DebugLogger.Log("Hotkey pressed while bouncing - manual stop, setting cooldown");
+            _lastManualStop = DateTime.Now;
+        }
+        
         _windowBouncer?.Start();
     }
 
@@ -306,20 +344,29 @@ public class TrayApplicationContext : ApplicationContext
 
     private void SettingsForm_ConfigSaved(object? sender, AppConfig config)
     {
+        DebugLogger.Log("=== Settings Saved ===");
         _config = config;
         ConfigManager.Save(_config);
+        
+        DebugLogger.Log("Updating hotkey manager with new config...");
         _hotkeyManager?.UpdateConfig(_config.Hotkey);
+        
+        DebugLogger.Log("Updating window bouncer with new config...");
         _windowBouncer?.UpdateConfig(_config);
         
         // Update debug logging
         if (_config.DebugLogging)
         {
+            DebugLogger.Log("Debug logging enabled from settings");
             DebugLogger.Enable();
         }
         else
         {
+            DebugLogger.Log("Debug logging disabled from settings");
             DebugLogger.Disable();
         }
+        
+        DebugLogger.Log("=== Settings Save Complete ===");
     }
 
     private void ExitMenuItem_Click(object? sender, EventArgs e)

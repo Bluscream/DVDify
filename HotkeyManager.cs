@@ -29,15 +29,33 @@ public class HotkeyManager : IDisposable
     public bool Register()
     {
         if (_registered)
+        {
+            DebugLogger.Log("Hotkey already registered, unregistering first");
             Unregister();
+        }
 
         uint modifiers = 0;
-        if (_config.WinKey) modifiers |= 0x0008; // MOD_WIN
-        if (_config.CtrlKey) modifiers |= 0x0002; // MOD_CONTROL
-        if (_config.AltKey) modifiers |= 0x0001; // MOD_ALT
-        if (_config.ShiftKey) modifiers |= 0x0004; // MOD_SHIFT
+        var modList = new List<string>();
+        if (_config.WinKey) { modifiers |= 0x0008; modList.Add("Win"); }
+        if (_config.CtrlKey) { modifiers |= 0x0002; modList.Add("Ctrl"); }
+        if (_config.AltKey) { modifiers |= 0x0001; modList.Add("Alt"); }
+        if (_config.ShiftKey) { modifiers |= 0x0004; modList.Add("Shift"); }
+
+        var keyName = ((Keys)_config.KeyCode).ToString();
+        var hotkeyStr = string.Join("+", modList) + (modList.Count > 0 ? "+" : "") + keyName;
+        DebugLogger.Log($"Registering hotkey: {hotkeyStr} (modifiers: 0x{modifiers:X}, keyCode: {_config.KeyCode})");
 
         _registered = RegisterHotKey(_windowHandle, _hotkeyId, modifiers, (uint)_config.KeyCode);
+        
+        if (_registered)
+        {
+            DebugLogger.Log($"Hotkey registered successfully: {hotkeyStr}");
+        }
+        else
+        {
+            DebugLogger.Log($"ERROR: Failed to register hotkey: {hotkeyStr} (may already be in use)");
+        }
+        
         return _registered;
     }
 
@@ -45,8 +63,10 @@ public class HotkeyManager : IDisposable
     {
         if (_registered)
         {
+            DebugLogger.Log("Unregistering hotkey");
             UnregisterHotKey(_windowHandle, _hotkeyId);
             _registered = false;
+            DebugLogger.Log("Hotkey unregistered");
         }
     }
 
@@ -54,12 +74,14 @@ public class HotkeyManager : IDisposable
     {
         if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == _hotkeyId)
         {
+            DebugLogger.Log("Hotkey pressed detected in ProcessMessage");
             HotkeyPressed?.Invoke(this, EventArgs.Empty);
         }
     }
 
     public void UpdateConfig(HotkeyConfig config)
     {
+        DebugLogger.Log("Updating hotkey configuration");
         _config = config;
         if (_registered)
         {

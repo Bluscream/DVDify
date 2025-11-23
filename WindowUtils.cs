@@ -159,22 +159,33 @@ public static class WindowUtils
     public static void NormalizeAndResizeWindow(IntPtr hWnd, int maxSizePercent)
     {
         if (hWnd == IntPtr.Zero)
+        {
+            DebugLogger.Log("NormalizeAndResizeWindow: Window handle is zero");
             return;
+        }
+
+        DebugLogger.Log($"Normalizing window: Handle={hWnd}, MaxSizePercent={maxSizePercent}");
 
         // Check if window is maximized and restore it
         if (IsZoomed(hWnd))
         {
+            DebugLogger.Log("Window is maximized, restoring...");
             ShowWindow(hWnd, SW_RESTORE);
             // Give the window a moment to restore
             System.Threading.Thread.Sleep(50);
+            DebugLogger.Log("Window restored from maximized state");
         }
 
         // Get current window rect
         if (!GetWindowRect(hWnd, out RECT rect))
+        {
+            DebugLogger.Log("ERROR: Failed to get window rect");
             return;
+        }
 
         int currentWidth = rect.Right - rect.Left;
         int currentHeight = rect.Bottom - rect.Top;
+        DebugLogger.Log($"Current window size: {currentWidth}x{currentHeight}");
 
         // Get the screen that contains the window center
         int centerX = (rect.Left + rect.Right) / 2;
@@ -229,7 +240,12 @@ public static class WindowUtils
             int newX = targetScreen.WorkingArea.Left + (targetScreen.WorkingArea.Width - newWidth) / 2;
             int newY = targetScreen.WorkingArea.Top + (targetScreen.WorkingArea.Height - newHeight) / 2;
 
+            DebugLogger.Log($"Resizing window from {currentWidth}x{currentHeight} to {newWidth}x{newHeight} at ({newX}, {newY})");
             SetWindowPos(hWnd, IntPtr.Zero, newX, newY, newWidth, newHeight, SWP_NOZORDER);
+        }
+        else
+        {
+            DebugLogger.Log("Window size is within limits, no resize needed");
         }
     }
 

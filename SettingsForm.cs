@@ -160,10 +160,13 @@ public class SettingsForm : Form
         var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 75 };
         var dumpWindowsButton = new Button { Text = "Dump All Windows", AutoSize = true };
         dumpWindowsButton.Click += DumpWindowsButton_Click;
+        var testWindowButton = new Button { Text = "Spawn Test Window", AutoSize = true };
+        testWindowButton.Click += TestWindowButton_Click;
         _saveButton.Click += SaveButton_Click;
         buttonPanel.Controls.Add(_saveButton);
         buttonPanel.Controls.Add(cancelButton);
         buttonPanel.Controls.Add(dumpWindowsButton);
+        buttonPanel.Controls.Add(testWindowButton);
 
         Controls.Add(mainPanel);
         Controls.Add(buttonPanel);
@@ -298,5 +301,11 @@ public class SettingsForm : Form
         {
             Cursor = Cursors.Default;
         }
+    }
+
+    private void TestWindowButton_Click(object? sender, EventArgs e)
+    {
+        var testWindow = new TestWindow();
+        // The window will show itself in its constructor
     }
 }
