@@ -53,3 +53,9 @@ $RECYCLE.BIN/
 
 
 AppData/
+*.exe
+*.dll
+obj/
+bin/
+publish/
+bin/

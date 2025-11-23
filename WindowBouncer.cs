@@ -190,6 +190,7 @@ public class WindowBouncer
         {
             DebugLogger.Log("PERFECT HIT! Showing confetti animation");
             _lastConfettiTime = DateTime.Now;
+            // Show confetti (we're already on UI thread from timer)
             var confettiForm = new ConfettiForm();
             confettiForm.Show();
         }

@@ -49,18 +49,10 @@ public class ConfettiForm : Form
         Size = new Size(maxX - minX, maxY - minY);
         
         // Make it click-through and transparent
-        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.DoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.DoubleBuffer, true);
         
         // Make window click-through and transparent using Win32 API
-        // Set up after handle is created to avoid white flash
-        HandleCreated += (s, e) =>
-        {
-            if (Handle != IntPtr.Zero)
-            {
-                int exStyle = GetWindowLong(Handle, GWL_EXSTYLE);
-                SetWindowLong(Handle, GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
-            }
-        };
+        // Set up in CreateParams to avoid white flash
         
         // Create particles - spread across all screens
         for (int i = 0; i < 150; i++)
@@ -125,12 +117,6 @@ public class ConfettiForm : Form
         }
     }
 
-    protected override void OnPaintBackground(PaintEventArgs e)
-    {
-        // Don't paint background - keep it transparent
-        // This prevents the white flash
-    }
-    
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
@@ -138,8 +124,10 @@ public class ConfettiForm : Form
         g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
         g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
 
-        // Only draw particles - no background clearing
+        // Clear with black (transparency key) to make background transparent
+        g.Clear(Color.Black);
 
+        // Draw particles
         foreach (var particle in _particles)
         {
             using (var brush = new SolidBrush(particle.Color))
@@ -158,7 +146,19 @@ public class ConfettiForm : Form
         {
             CreateParams cp = base.CreateParams;
             cp.ExStyle |= 0x80000; // WS_EX_LAYERED
+            cp.ExStyle |= 0x20; // WS_EX_TRANSPARENT (click-through)
             return cp;
+        }
+    }
+    
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        // Ensure transparency is set up
+        if (Handle != IntPtr.Zero)
+        {
+            int exStyle = GetWindowLong(Handle, GWL_EXSTYLE);
+            SetWindowLong(Handle, GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
         }
     }
     
