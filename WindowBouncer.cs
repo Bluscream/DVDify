@@ -223,7 +223,8 @@ public class WindowBouncer
         int newY = _currentWindow.Y + _velocityY;
 
         // Check boundaries and bounce
-        bool perfectHit = false;
+        bool perfectHitX = false;
+        bool perfectHitY = false;
         // Use configured margin for "perfect" hits
         double marginPercent = _config.Confetti.PerfectHitMarginPercent / 100.0;
         int marginX = Math.Min(5, Math.Max(1, (int)(_allScreensBounds.Width * marginPercent))); // Configurable margin, max 5px
@@ -235,51 +236,53 @@ public class WindowBouncer
         
         if (newX <= _allScreensBounds.Left)
         {
-            // Check if it's a perfect hit (within 1% margin) - window is exactly at or very close to edge
+            // Check if it's a perfect hit (within margin) - window is exactly at or very close to edge
             int distanceFromEdge = Math.Abs(originalX - _allScreensBounds.Left);
-            perfectHit = distanceFromEdge <= marginX;
+            perfectHitX = distanceFromEdge <= marginX;
             
             newX = _allScreensBounds.Left;
             _velocityX = Math.Abs(_velocityX); // Bounce right
-            DebugLogger.Log($"Bounced off left edge: X={newX}, originalX={originalX}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHit}");
+            DebugLogger.Log($"Bounced off left edge: X={newX}, originalX={originalX}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHitX}");
         }
         else if (newX + _currentWindow.Width >= _allScreensBounds.Right)
         {
-            // Check if it's a perfect hit (within 1% margin) - window edge is exactly at or very close to screen edge
+            // Check if it's a perfect hit (within margin) - window edge is exactly at or very close to screen edge
             int rightEdge = originalX + _currentWindow.Width;
             int distanceFromEdge = Math.Abs(rightEdge - _allScreensBounds.Right);
-            perfectHit = distanceFromEdge <= marginX;
+            perfectHitX = distanceFromEdge <= marginX;
             
             newX = _allScreensBounds.Right - _currentWindow.Width;
             _velocityX = -Math.Abs(_velocityX); // Bounce left
-            DebugLogger.Log($"Bounced off right edge: X={newX}, rightEdge={rightEdge}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHit}");
+            DebugLogger.Log($"Bounced off right edge: X={newX}, rightEdge={rightEdge}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHitX}");
         }
 
         if (newY <= _allScreensBounds.Top)
         {
-            // Check if it's a perfect hit (within 1% margin)
+            // Check if it's a perfect hit (within margin)
             int distanceFromEdge = Math.Abs(originalY - _allScreensBounds.Top);
-            perfectHit = perfectHit || distanceFromEdge <= marginY;
+            perfectHitY = distanceFromEdge <= marginY;
             
             newY = _allScreensBounds.Top;
             _velocityY = Math.Abs(_velocityY); // Bounce down
-            DebugLogger.Log($"Bounced off top edge: Y={newY}, originalY={originalY}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHit}");
+            DebugLogger.Log($"Bounced off top edge: Y={newY}, originalY={originalY}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHitY}");
         }
         else if (newY + _currentWindow.Height >= _allScreensBounds.Bottom)
         {
-            // Check if it's a perfect hit (within 1% margin)
+            // Check if it's a perfect hit (within margin)
             int bottomEdge = originalY + _currentWindow.Height;
             int distanceFromEdge = Math.Abs(bottomEdge - _allScreensBounds.Bottom);
-            perfectHit = perfectHit || distanceFromEdge <= marginY;
+            perfectHitY = distanceFromEdge <= marginY;
             
             newY = _allScreensBounds.Bottom - _currentWindow.Height;
             _velocityY = -Math.Abs(_velocityY); // Bounce up
-            DebugLogger.Log($"Bounced off bottom edge: Y={newY}, bottomEdge={bottomEdge}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHit}");
+            DebugLogger.Log($"Bounced off bottom edge: Y={newY}, bottomEdge={bottomEdge}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHitY}");
         }
 
-        // Show confetti on perfect hit (only once per bounce, not for every edge)
-        if (perfectHit)
+        // Show confetti only on CORNER hits (both X and Y edges hit perfectly)
+        bool cornerHit = perfectHitX && perfectHitY;
+        if (cornerHit)
         {
+            DebugLogger.Log("CORNER HIT! Both edges hit perfectly - showing confetti");
             ShowConfetti();
         }
 
