@@ -13,6 +13,8 @@ public class WindowBouncer
     private System.Windows.Forms.Timer? _animationTimer;
     private Rectangle _allScreensBounds;
     private AppConfig _config;
+    private int _cachedWindowWidth;
+    private int _cachedWindowHeight;
 
     public event EventHandler? BouncingStopped;
 
@@ -116,6 +118,10 @@ public class WindowBouncer
         }
 
         _currentWindow = windowInfo;
+        
+        // Cache window dimensions to avoid repeated GetWindowRect calls
+        _cachedWindowWidth = windowInfo.Width;
+        _cachedWindowHeight = windowInfo.Height;
         
         // Get bounds based on configuration
         if (_config.Animation.UseAllScreens)
@@ -244,14 +250,14 @@ public class WindowBouncer
             _velocityX = Math.Abs(_velocityX); // Bounce right
             DebugLogger.Log($"Bounced off left edge: X={newX}, originalX={originalX}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHitX}");
         }
-        else if (newX + _currentWindow.Width >= _allScreensBounds.Right)
+        else if (newX + _cachedWindowWidth >= _allScreensBounds.Right)
         {
             // Check if it's a perfect hit (within margin) - window edge is exactly at or very close to screen edge
-            int rightEdge = originalX + _currentWindow.Width;
+            int rightEdge = originalX + _cachedWindowWidth;
             int distanceFromEdge = Math.Abs(rightEdge - _allScreensBounds.Right);
             perfectHitX = distanceFromEdge <= marginX;
             
-            newX = _allScreensBounds.Right - _currentWindow.Width;
+            newX = _allScreensBounds.Right - _cachedWindowWidth;
             _velocityX = -Math.Abs(_velocityX); // Bounce left
             DebugLogger.Log($"Bounced off right edge: X={newX}, rightEdge={rightEdge}, distance={distanceFromEdge}, margin={marginX}, perfectHit={perfectHitX}");
         }
@@ -266,14 +272,14 @@ public class WindowBouncer
             _velocityY = Math.Abs(_velocityY); // Bounce down
             DebugLogger.Log($"Bounced off top edge: Y={newY}, originalY={originalY}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHitY}");
         }
-        else if (newY + _currentWindow.Height >= _allScreensBounds.Bottom)
+        else if (newY + _cachedWindowHeight >= _allScreensBounds.Bottom)
         {
             // Check if it's a perfect hit (within margin)
-            int bottomEdge = originalY + _currentWindow.Height;
+            int bottomEdge = originalY + _cachedWindowHeight;
             int distanceFromEdge = Math.Abs(bottomEdge - _allScreensBounds.Bottom);
             perfectHitY = distanceFromEdge <= marginY;
             
-            newY = _allScreensBounds.Bottom - _currentWindow.Height;
+            newY = _allScreensBounds.Bottom - _cachedWindowHeight;
             _velocityY = -Math.Abs(_velocityY); // Bounce up
             DebugLogger.Log($"Bounced off bottom edge: Y={newY}, bottomEdge={bottomEdge}, distance={distanceFromEdge}, margin={marginY}, perfectHit={perfectHitY}");
         }
@@ -297,6 +303,8 @@ public class WindowBouncer
         WindowUtils.SetWindowPosition(_currentWindow.Handle, newX, newY);
         _currentWindow.X = newX;
         _currentWindow.Y = newY;
+        
+        // Update cached position (size shouldn't change during animation)
     }
 
     private bool MatchesAnyRule(WindowInfo windowInfo)
@@ -396,7 +404,8 @@ public class WindowBouncer
         if (string.IsNullOrEmpty(text))
             return false;
 
-        // Case-insensitive comparison
+        // Case-insensitive comparison - cache if needed for repeated calls
+        // Note: For single-use patterns, this is fine. For repeated patterns, consider caching.
         pattern = pattern.ToLowerInvariant();
         text = text.ToLowerInvariant();
 

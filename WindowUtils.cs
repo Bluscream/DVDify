@@ -150,9 +150,8 @@ public static class WindowUtils
                 SWP_NOSIZE | SWP_NOZORDER | SWP_DRAWFRAME | SWP_SHOWWINDOW);
         }
         
-        // Force window and its children to redraw
-        InvalidateRect(hWnd, IntPtr.Zero, true);
-        UpdateWindow(hWnd);
+        // Only force redraw if MoveWindow didn't handle it (bRepaint=true should handle it)
+        // Reduced to single redraw call for better performance
         RedrawWindow(hWnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE);
     }
 
@@ -305,9 +304,62 @@ public static class WindowUtils
 
         EnumWindows(enumProc, IntPtr.Zero);
 
+        // Pre-allocate list capacity for better performance
+        windows.Capacity = windowList.Count;
+
         foreach (var hWnd in windowList)
         {
             var info = GetWindowInfo(hWnd);
+            if (info.Handle != IntPtr.Zero && (!string.IsNullOrEmpty(info.WindowName) || !string.IsNullOrEmpty(info.ClassName)))
+            {
+                windows.Add(info);
+            }
+        }
+
+        return windows;
+    }
+    
+    // Optimized version that skips expensive executable path lookup for window matching
+    public static List<WindowInfo> GetAllWindowsInfoFast()
+    {
+        var windows = new List<WindowInfo>();
+        var windowList = new List<IntPtr>();
+
+        EnumWindowsProc enumProc = (hWnd, lParam) =>
+        {
+            if (IsWindowVisible(hWnd))
+            {
+                windowList.Add(hWnd);
+            }
+            return true;
+        };
+
+        EnumWindows(enumProc, IntPtr.Zero);
+        windows.Capacity = windowList.Count;
+
+        foreach (var hWnd in windowList)
+        {
+            var info = new WindowInfo { Handle = hWnd };
+            
+            // Get window title
+            var title = new StringBuilder(256);
+            GetWindowText(hWnd, title, title.Capacity);
+            info.WindowName = title.ToString();
+
+            // Get class name
+            var className = new StringBuilder(256);
+            GetClassName(hWnd, className, className.Capacity);
+            info.ClassName = className.ToString();
+
+            // Get window position and size (skip expensive executable path lookup)
+            if (GetWindowRect(hWnd, out RECT rect))
+            {
+                info.X = rect.Left;
+                info.Y = rect.Top;
+                info.Width = rect.Right - rect.Left;
+                info.Height = rect.Bottom - rect.Top;
+            }
+
             if (info.Handle != IntPtr.Zero && (!string.IsNullOrEmpty(info.WindowName) || !string.IsNullOrEmpty(info.ClassName)))
             {
                 windows.Add(info);

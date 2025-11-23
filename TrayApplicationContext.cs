@@ -62,7 +62,8 @@ public class TrayApplicationContext : ApplicationContext
             DebugLogger.Log("Startup: Checking for matching windows...");
             
             // Check if there's a matching window
-            var allWindows = WindowUtils.GetAllWindowsInfo();
+            // Use fast version that skips expensive executable path lookup
+            var allWindows = WindowUtils.GetAllWindowsInfoFast();
             DebugLogger.Log($"Startup: Found {allWindows.Count} visible windows");
             
             // Find all matching windows and pick the best one (largest with title preferred)
@@ -71,6 +72,13 @@ public class TrayApplicationContext : ApplicationContext
             
             foreach (var window in allWindows)
             {
+                // If rule matching needs executable path, get it now (lazy loading)
+                if (NeedsExecutablePathForMatching() && string.IsNullOrEmpty(window.ExecutablePath))
+                {
+                    var fullInfo = WindowUtils.GetWindowInfo(window.Handle);
+                    window.ExecutablePath = fullInfo.ExecutablePath;
+                }
+                
                 if (MatchesAnyRule(window))
                 {
                     // Score windows: prefer larger windows (likely main windows)
@@ -127,12 +135,21 @@ public class TrayApplicationContext : ApplicationContext
             }
             
             // Find all matching windows and pick the best one
-            var allWindows = WindowUtils.GetAllWindowsInfo();
+            // Use fast version that skips expensive executable path lookup
+            // We'll only get executable path if needed for matching
+            var allWindows = WindowUtils.GetAllWindowsInfoFast();
             WindowInfo? bestMatch = null;
             int bestMatchScore = 0;
             
             foreach (var window in allWindows)
             {
+                // If rule matching needs executable path, get it now (lazy loading)
+                if (NeedsExecutablePathForMatching() && string.IsNullOrEmpty(window.ExecutablePath))
+                {
+                    var fullInfo = WindowUtils.GetWindowInfo(window.Handle);
+                    window.ExecutablePath = fullInfo.ExecutablePath;
+                }
+                
                 if (MatchesAnyRule(window))
                 {
                     // Score windows: prefer larger windows (likely main windows)
@@ -214,6 +231,14 @@ public class TrayApplicationContext : ApplicationContext
         }
 
         return false;
+    }
+    
+    private bool NeedsExecutablePathForMatching()
+    {
+        if (_config.WindowRules == null || _config.WindowRules.Count == 0)
+            return false;
+            
+        return _config.WindowRules.Any(r => r.Enabled && !string.IsNullOrWhiteSpace(r.ExecutablePath));
     }
     
     private bool GlobMatch(string pattern, string text)

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Windows.Forms;
 
 namespace DVDify;
 
@@ -24,8 +25,19 @@ public static class DebugLogger
         if (_enabled)
         {
             Log("=== Debug logging disabled ===");
+            FlushLogBuffer(); // Ensure final messages are written
         }
         _enabled = false;
+        _flushTimer.Enabled = false;
+    }
+
+    private static readonly StringBuilder _logBuffer = new StringBuilder();
+    private static readonly System.Windows.Forms.Timer _flushTimer = new System.Windows.Forms.Timer { Interval = 1000 }; // Flush every second
+    private static bool _flushTimerInitialized = false;
+
+    static DebugLogger()
+    {
+        _flushTimer.Tick += (s, e) => FlushLogBuffer();
     }
 
     public static void Log(string message)
@@ -37,15 +49,46 @@ public static class DebugLogger
         {
             try
             {
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                _logBuffer.Append($"[{timestamp}] {message}{Environment.NewLine}");
+                
+                // Initialize flush timer on first log
+                if (!_flushTimerInitialized)
+                {
+                    _flushTimer.Enabled = true;
+                    _flushTimerInitialized = true;
+                }
+                
+                // Flush immediately if buffer gets too large (>64KB)
+                if (_logBuffer.Length > 65536)
+                {
+                    FlushLogBuffer();
+                }
+            }
+            catch
+            {
+                // Silently fail if logging fails
+            }
+        }
+    }
+    
+    private static void FlushLogBuffer()
+    {
+        if (_logBuffer.Length == 0)
+            return;
+            
+        lock (_lock)
+        {
+            try
+            {
                 var directory = Path.GetDirectoryName(LogPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
 
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                var logEntry = $"[{timestamp}] {message}{Environment.NewLine}";
-                File.AppendAllText(LogPath, logEntry, Encoding.UTF8);
+                File.AppendAllText(LogPath, _logBuffer.ToString(), Encoding.UTF8);
+                _logBuffer.Clear();
             }
             catch
             {

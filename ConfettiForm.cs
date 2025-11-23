@@ -130,15 +130,30 @@ public class ConfettiForm : Form
         // Clear with black (transparency key) to make background transparent
         g.Clear(Color.Black);
 
-        // Draw particles
-        foreach (var particle in _particles)
+        // Draw particles - reuse brushes per color for better performance
+        var brushCache = new Dictionary<Color, SolidBrush>();
+        try
         {
-            using (var brush = new SolidBrush(particle.Color))
+            foreach (var particle in _particles)
             {
+                if (!brushCache.TryGetValue(particle.Color, out var brush))
+                {
+                    brush = new SolidBrush(particle.Color);
+                    brushCache[particle.Color] = brush;
+                }
+                
                 g.TranslateTransform(particle.X, particle.Y);
                 g.RotateTransform(particle.Rotation);
                 g.FillRectangle(brush, -particle.Size / 2, -particle.Size / 2, particle.Size, particle.Size);
                 g.ResetTransform();
+            }
+        }
+        finally
+        {
+            // Dispose all brushes
+            foreach (var brush in brushCache.Values)
+            {
+                brush.Dispose();
             }
         }
     }
