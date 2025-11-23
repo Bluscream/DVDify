@@ -178,6 +178,13 @@ public class WindowBouncer
 
     private void ShowConfetti()
     {
+        // Check if confetti is enabled
+        if (!_config.Confetti.Enabled)
+        {
+            DebugLogger.Log("Perfect hit detected but confetti is disabled");
+            return;
+        }
+        
         // Cooldown to prevent too many confetti animations
         var timeSinceLastConfetti = (DateTime.Now - _lastConfettiTime).TotalMilliseconds;
         if (timeSinceLastConfetti < CONFETTI_COOLDOWN_MS)
@@ -190,8 +197,8 @@ public class WindowBouncer
         {
             DebugLogger.Log("PERFECT HIT! Showing confetti animation");
             _lastConfettiTime = DateTime.Now;
-            // Show confetti (we're already on UI thread from timer)
-            var confettiForm = new ConfettiForm();
+            // Show confetti with configured settings
+            var confettiForm = new ConfettiForm(_config.Confetti);
             confettiForm.Show();
         }
         catch (Exception ex)
@@ -217,9 +224,10 @@ public class WindowBouncer
 
         // Check boundaries and bounce
         bool perfectHit = false;
-        // Use a stricter margin for "perfect" hits - 0.5% or 2px, whichever is smaller
-        int marginX = Math.Min(2, Math.Max(1, (int)(_allScreensBounds.Width * 0.005))); // 0.5% margin, max 2px
-        int marginY = Math.Min(2, Math.Max(1, (int)(_allScreensBounds.Height * 0.005))); // 0.5% margin, max 2px
+        // Use configured margin for "perfect" hits
+        double marginPercent = _config.Confetti.PerfectHitMarginPercent / 100.0;
+        int marginX = Math.Min(5, Math.Max(1, (int)(_allScreensBounds.Width * marginPercent))); // Configurable margin, max 5px
+        int marginY = Math.Min(5, Math.Max(1, (int)(_allScreensBounds.Height * marginPercent))); // Configurable margin, max 5px
         
         // Store original position before clamping to check for perfect hit
         int originalX = newX;

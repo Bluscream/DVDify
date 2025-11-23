@@ -13,6 +13,10 @@ public class SettingsForm : Form
     private NumericUpDown _maxSizePercentNumeric = null!;
     private CheckBox _useAllScreensCheckBox = null!;
     private CheckBox _debugLoggingCheckBox = null!;
+    private CheckBox _confettiEnabledCheckBox = null!;
+    private NumericUpDown _confettiParticleCountNumeric = null!;
+    private NumericUpDown _confettiDurationNumeric = null!;
+    private NumericUpDown _confettiMarginPercentNumeric = null!;
     private Button _saveButton = null!;
     private Button _testHotkeyButton = null!;
     private bool _capturingHotkey = false;
@@ -37,6 +41,13 @@ public class SettingsForm : Form
                 UpdateInterval = config.Animation.UpdateInterval,
                 MaxWindowSizePercent = config.Animation.MaxWindowSizePercent,
                 UseAllScreens = config.Animation.UseAllScreens
+            },
+            Confetti = new ConfettiConfig
+            {
+                Enabled = config.Confetti.Enabled,
+                ParticleCount = config.Confetti.ParticleCount,
+                DurationFrames = config.Confetti.DurationFrames,
+                PerfectHitMarginPercent = config.Confetti.PerfectHitMarginPercent
             },
             WindowRules = config.WindowRules.Select(r => new WindowRule
             {
@@ -106,10 +117,35 @@ public class SettingsForm : Form
         _debugLoggingCheckBox = new CheckBox { Checked = _config.DebugLogging, Dock = DockStyle.Fill, Text = "Enable debug logging to file" };
         mainPanel.Controls.Add(_debugLoggingCheckBox, 1, 5);
 
+        // Confetti Settings
+        var confettiLabel = new Label { Text = "Confetti Settings:", Anchor = AnchorStyles.Left, Font = new Font(DefaultFont, FontStyle.Bold) };
+        mainPanel.SetColumnSpan(confettiLabel, 2);
+        mainPanel.Controls.Add(confettiLabel, 0, 6);
+
+        // Confetti Enabled
+        mainPanel.Controls.Add(new Label { Text = "Enable Confetti:", Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, 7);
+        _confettiEnabledCheckBox = new CheckBox { Checked = _config.Confetti.Enabled, Dock = DockStyle.Fill, Text = "Show confetti on perfect edge hits" };
+        mainPanel.Controls.Add(_confettiEnabledCheckBox, 1, 7);
+
+        // Confetti Particle Count
+        mainPanel.Controls.Add(new Label { Text = "Particle Count:", Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, 8);
+        _confettiParticleCountNumeric = new NumericUpDown { Minimum = 50, Maximum = 500, Value = _config.Confetti.ParticleCount, Dock = DockStyle.Fill };
+        mainPanel.Controls.Add(_confettiParticleCountNumeric, 1, 8);
+
+        // Confetti Duration
+        mainPanel.Controls.Add(new Label { Text = "Duration (frames):", Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, 9);
+        _confettiDurationNumeric = new NumericUpDown { Minimum = 30, Maximum = 180, Value = _config.Confetti.DurationFrames, Dock = DockStyle.Fill };
+        mainPanel.Controls.Add(_confettiDurationNumeric, 1, 9);
+
+        // Perfect Hit Margin
+        mainPanel.Controls.Add(new Label { Text = "Perfect Hit Margin (%):", Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, 10);
+        _confettiMarginPercentNumeric = new NumericUpDown { Minimum = 0.1m, Maximum = 5.0m, DecimalPlaces = 1, Value = (decimal)_config.Confetti.PerfectHitMarginPercent, Dock = DockStyle.Fill };
+        mainPanel.Controls.Add(_confettiMarginPercentNumeric, 1, 10);
+
         // Window Rules section
-        var rulesLabel = new Label { Text = "Window Rules:", Anchor = AnchorStyles.Left };
+        var rulesLabel = new Label { Text = "Window Rules:", Anchor = AnchorStyles.Left, Font = new Font(DefaultFont, FontStyle.Bold) };
         mainPanel.SetColumnSpan(rulesLabel, 2);
-        mainPanel.Controls.Add(rulesLabel, 0, 6);
+        mainPanel.Controls.Add(rulesLabel, 0, 11);
 
         _rulesGrid = new DataGridView
         {
@@ -242,6 +278,11 @@ public class SettingsForm : Form
         _config.Animation.MaxWindowSizePercent = (int)_maxSizePercentNumeric.Value;
         _config.Animation.UseAllScreens = _useAllScreensCheckBox.Checked;
         _config.DebugLogging = _debugLoggingCheckBox.Checked;
+        
+        _config.Confetti.Enabled = _confettiEnabledCheckBox.Checked;
+        _config.Confetti.ParticleCount = (int)_confettiParticleCountNumeric.Value;
+        _config.Confetti.DurationFrames = (int)_confettiDurationNumeric.Value;
+        _config.Confetti.PerfectHitMarginPercent = (double)_confettiMarginPercentNumeric.Value;
 
         _config.WindowRules.Clear();
         foreach (DataGridViewRow row in _rulesGrid.Rows)

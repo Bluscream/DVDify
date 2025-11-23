@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using DVDify.Models;
 
 namespace DVDify;
 
@@ -25,10 +26,11 @@ public class ConfettiForm : Form
     private readonly System.Windows.Forms.Timer _animationTimer;
     private readonly Random _random = new();
     private int _frameCount = 0;
-    private const int MAX_FRAMES = 60; // ~1 second at 60fps
+    private readonly int _maxFrames;
 
-    public ConfettiForm()
+    public ConfettiForm(ConfettiConfig config)
     {
+        _maxFrames = config.DurationFrames;
         FormBorderStyle = FormBorderStyle.None;
         WindowState = FormWindowState.Normal; // Don't maximize, set size manually
         TopMost = true;
@@ -55,7 +57,8 @@ public class ConfettiForm : Form
         // Set up in CreateParams to avoid white flash
         
         // Create particles - spread across all screens
-        for (int i = 0; i < 150; i++)
+        int particleCount = config.ParticleCount;
+        for (int i = 0; i < particleCount; i++)
         {
             _particles.Add(new ConfettiParticle
             {
@@ -110,7 +113,7 @@ public class ConfettiForm : Form
 
         Invalidate();
 
-        if (_frameCount >= MAX_FRAMES)
+        if (_frameCount >= _maxFrames)
         {
             _animationTimer.Stop();
             Close();
